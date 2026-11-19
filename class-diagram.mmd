@@ -1,0 +1,236 @@
+classDiagram
+    direction TB
+
+    %% ==========================================
+    %% 1. HIERARKI USER (Inheritance & Abstraction)
+    %% ==========================================
+    class User {
+        <<abstract>>
+        #id: int
+        #username: String
+        -password: String
+        #email: String
+        +login() boolean
+        +logout() void
+        +tampilkanDashboard()* String
+    }
+
+    class ProspectiveStudent {
+        -nomorPendaftaran: String
+        -statusSeleksi: String
+        +tampilkanDashboard() String
+        +daftarPMB() PMBRegistration
+        +lihatStatusSeleksi() String
+    }
+
+    class Student {
+        -nim: String
+        -programStudi: String
+        -semester: int
+        -ipk: float
+        +tampilkanDashboard() String
+        +lihatJadwal() List~Schedule~
+        +lakukanPresensi(qrToken) boolean
+    }
+
+    class Lecturer {
+        -nidn: String
+        -departemen: String
+        +tampilkanDashboard() String
+        +approveKRS(enrollment) void
+        +inputNilai(enrollment, nilaiAngka) Grade
+        +lihatJadwalMengajar() List~Schedule~
+    }
+
+    class Admin {
+        -kodeAdmin: String
+        +tampilkanDashboard() String
+        +verifikasiBerkasPMB(pmb) boolean
+        +kelolaPeriode(periode) void
+        +kelolaJadwal(schedule) void
+    }
+
+    %% ==========================================
+    %% 2. MODUL PMB & FACTORY PATTERN
+    %% ==========================================
+    class PMBRegistration {
+        -idPendaftaran: int
+        -tanggalDaftar: Date
+        -berkasLengkap: boolean
+        -statusVerifikasi: String
+        +unggahBerkas(dokumen) void
+        +updateStatus(status) void
+    }
+
+    class StudentFactory {
+        +createStudentFromPMB(ps, prodi) Student
+        -generateNIM(prodi, tahun) String
+    }
+
+    %% ==========================================
+    %% 3. CLASS INTI AKADEMIK
+    %% ==========================================
+    class AcademicPeriod {
+        -idPeriode: int
+        -semester: String
+        -tahunAkademik: String
+        -statusPeriode: String
+        +bukaPeriode() void
+        +tutupPeriode() void
+        +isAktif() boolean
+    }
+
+    class Course {
+        -kode: String
+        -nama: String
+        -sks: int
+        +getInfoCourse() String
+        +getPrerequisites() List~Course~
+    }
+
+    class Enrollment {
+        -idEnrollment: int
+        -tanggalSubmit: Date
+        -status: String
+        +updateStatus(status) void
+        +isDisetujui() boolean
+    }
+
+    class Grade {
+        -idGrade: int
+        -nilaiAngka: float
+        -nilaiHuruf: String
+        +hitungNilaiHuruf() String
+        +hitungBobot() float
+    }
+
+    class Schedule {
+        -idSchedule: int
+        -hari: String
+        -jamMulai: String
+        -jamSelesai: String
+        +isBentrokDengan(other) boolean
+    }
+
+    class Room {
+        -idRoom: int
+        -kodeRuangan: String
+        -namaRuangan: String
+        -kapasitas: int
+        +cekKetersediaan(hari, jam) boolean
+    }
+
+    class Payment {
+        -idPayment: int
+        -jumlah: decimal
+        -tanggalBayar: Date
+        -statusPembayaran: String
+        +prosesPembayaran() boolean
+        +isLunas() boolean
+    }
+
+    class Attendance {
+        -idAttendance: int
+        -tanggal: Date
+        -waktuScan: String
+        -statusKehadiran: String
+        +validasiQRCode(qrToken) boolean
+    }
+
+    %% ==========================================
+    %% 4. SERVICES & DESIGN PATTERNS (SRP, OCP, DIP)
+    %% ==========================================
+    class KRSService {
+        -rules: List~IValidationRule~
+        +submitKRS(student, courses, periode) List~Enrollment~
+        +validasiKRS(student, course, periode) boolean
+        +hitungTotalSKS(student, periode) int
+    }
+
+    class IValidationRule {
+        <<interface>>
+        +validate(student, course, periode) boolean
+        +getErrorMessage() String
+    }
+
+    class MaxSKSValidation {
+        -maxSKS: int
+        +validate(student, course, periode) boolean
+        +getErrorMessage() String
+    }
+
+    class PrerequisiteValidation {
+        +validate(student, course, periode) boolean
+        +getErrorMessage() String
+    }
+
+    class ScheduleConflictValidation {
+        +validate(student, course, periode) boolean
+        +getErrorMessage() String
+    }
+
+    class DoubleEnrollmentValidation {
+        +validate(student, course, periode) boolean
+        +getErrorMessage() String
+    }
+
+    class INotificationService {
+        <<interface>>
+        +sendNotification(recipient, message) void
+    }
+
+    class NotificationService {
+        +sendNotification(recipient, message) void
+    }
+
+    class TranscriptService {
+        +hitungIPS(student, periode) float
+        +hitungIPK(student) float
+        +generateTranskripPDF(student) String
+    }
+
+    %% ==========================================
+    %% 5. RELASI ANTARCLASS
+    %% ==========================================
+
+    %% Inheritance (is-a)
+    User <|-- ProspectiveStudent
+    User <|-- Student
+    User <|-- Lecturer
+    User <|-- Admin
+
+    %% Interface Realization (Strategy & DIP)
+    IValidationRule <|.. MaxSKSValidation
+    IValidationRule <|.. PrerequisiteValidation
+    IValidationRule <|.. ScheduleConflictValidation
+    IValidationRule <|.. DoubleEnrollmentValidation
+    INotificationService <|.. NotificationService
+
+    %% Composition (relasi kuat - bagian ikut hilang jika induk dihapus)
+    Enrollment "1" *-- "0..1" Grade : memiliki
+    Course "1" *-- "0..*" Schedule : dijadwalkan
+    ProspectiveStudent "1" *-- "0..1" PMBRegistration : mengajukan
+
+    %% Aggregation (relasi lemah - bagian tetap eksis tanpa wadah)
+    AcademicPeriod "1" o-- "0..*" Enrollment : mencakup
+    Room "1" o-- "0..*" Schedule : menampung
+    KRSService "1" o-- "1..*" IValidationRule : menerapkan
+
+    %% Association
+    Student "1" --> "0..*" Enrollment : mengambil
+    Course "1" --> "0..*" Enrollment : dipilih
+    Course "0..*" --> "0..*" Course : prasyarat
+    Lecturer "1" --> "0..*" Schedule : mengampu
+    Lecturer "1" --> "0..*" Enrollment : membimbingPA
+    Admin "1" --> "0..*" PMBRegistration : memverifikasi
+    Student "1" --> "0..*" Payment : melakukan
+    AcademicPeriod "1" --> "0..*" Payment : periodeTagihan
+    Student "1" --> "0..*" Attendance : mencatat
+    Schedule "1" --> "0..*" Attendance : sesiPresensi
+
+    %% Dependency (Service & Factory)
+    StudentFactory ..> ProspectiveStudent : bacaData
+    StudentFactory ..> Student : buatAkunBaru
+    KRSService ..> Enrollment : buatKRS
+    KRSService ..> INotificationService : kirimNotif
+    TranscriptService ..> Enrollment : bacaNilai

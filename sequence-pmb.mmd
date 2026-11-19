@@ -1,0 +1,64 @@
+sequenceDiagram
+    autonumber
+    actor CalonMhs as ProspectiveStudent
+    participant PortalPMB as Sistem PMB
+    participant PMBReg as PMBRegistration
+    actor Admin as Admin Akademik
+    participant Factory as StudentFactory
+    participant DB as Database
+    participant Notif as NotificationService
+
+    Note over CalonMhs,Notif: Skenario 1 - Proses Pendaftaran Mahasiswa Baru (PMB)
+
+    CalonMhs->>+PortalPMB: daftarPMB(biodata, pilihanProdi, berkas)
+    PortalPMB->>+PMBReg: create(biodata, berkas)
+    PMBReg->>PMBReg: unggahBerkas(dokumen)
+    PMBReg->>+DB: simpanPendaftaran(status = "Menunggu Verifikasi")
+    DB-->>-PMBReg: idPendaftaran, nomorPendaftaran
+    PMBReg-->>-PortalPMB: pendaftaranTersimpan
+    PortalPMB-->>-CalonMhs: tampilkanNomorPendaftaran()
+
+    Note over Admin,DB: Tahap Verifikasi Berkas oleh Admin Akademik
+
+    Admin->>+PortalPMB: bukaDaftarPendaftar()
+    PortalPMB->>+DB: ambilDataPMB(status = "Menunggu Verifikasi")
+    DB-->>-PortalPMB: listPMBRegistration
+    PortalPMB-->>-Admin: tampilkanDaftarBerkas()
+
+    Admin->>PortalPMB: verifikasiBerkasPMB(idPendaftaran)
+    PortalPMB->>+PMBReg: cekKelengkapanBerkas()
+    PMBReg-->>-PortalPMB: hasilKelengkapan (boolean)
+
+    alt Berkas Tidak Lengkap / Tidak Valid (Alternate Flow)
+        PortalPMB->>PMBReg: updateStatus("Perlu Revisi Berkas")
+        PortalPMB->>DB: simpanStatusPendaftaran("Perlu Revisi Berkas")
+        PortalPMB->>Notif: sendNotification(CalonMhs, "Berkas kurang lengkap, silakan unggah ulang")
+        Notif-->>CalonMhs: emailNotifikasiRevisi()
+        PortalPMB-->>Admin: konfirmasiStatusRevisi()
+    else Berkas Lengkap dan Valid (Main Flow)
+        PortalPMB->>PMBReg: updateStatus("Berkas Terverifikasi")
+        PortalPMB->>DB: simpanStatusPendaftaran("Berkas Terverifikasi")
+        PortalPMB-->>Admin: konfirmasiBerkasValid()
+
+        Note over Admin,Factory: Tahap Keputusan Seleksi dan Aktivasi Mahasiswa
+
+        Admin->>PortalPMB: inputHasilSeleksi(idPendaftaran, hasilSeleksi)
+
+        alt Lulus Seleksi
+            PortalPMB->>PMBReg: updateStatus("Lulus Seleksi")
+            PortalPMB->>+Factory: createStudentFromPMB(prospectiveStudent, prodi)
+            Factory->>Factory: generateNIM(prodi, tahun)
+            Factory->>+DB: simpanStudentBaru(nim, idPendaftaran)
+            DB-->>-Factory: studentCreated
+            Factory-->>-PortalPMB: objek Student (dengan NIM baru)
+            PortalPMB->>Notif: sendNotification(CalonMhs, "Selamat! Anda diterima dengan NIM baru")
+            Notif-->>CalonMhs: emailPengumumanLulusDanNIM()
+            PortalPMB-->>Admin: tampilkanNIMTerbentuk()
+        else Tidak Lulus Seleksi (Alternate Flow)
+            PortalPMB->>PMBReg: updateStatus("Tidak Lulus")
+            PortalPMB->>DB: simpanStatusPendaftaran("Tidak Lulus")
+            PortalPMB->>Notif: sendNotification(CalonMhs, "Mohon maaf, Anda belum lolos seleksi")
+            Notif-->>CalonMhs: emailPengumumanTidakLulus()
+            PortalPMB-->>Admin: konfirmasiHasilTersimpan()
+        end
+    end

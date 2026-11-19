@@ -1,0 +1,85 @@
+sequenceDiagram
+    autonumber
+    actor Mhs as Student
+    participant UI as Sistem KRS
+    participant KRS as KRSService
+    participant RulePrasyarat as PrerequisiteValidation
+    participant RuleDouble as DoubleEnrollmentValidation
+    participant RuleSKS as MaxSKSValidation
+    participant RuleJadwal as ScheduleConflictValidation
+    participant DB as Database
+    participant Notif as NotificationService
+    actor DosenPA as Lecturer (Dosen PA)
+
+    Note over Mhs,DosenPA: Skenario 2 - Pengisian dan Validasi KRS (Strategy Pattern)
+
+    Mhs->>UI: submitKRS(daftarMataKuliah, periodeAktif)
+    UI->>KRS: submitKRS(student, courses, periodeAktif)
+
+    KRS->>+DB: cekPeriodeAktif(periodeAktif)
+    DB-->>-KRS: isAktif
+
+    alt Periode KRS Sudah Ditutup (Error Flow)
+        KRS-->>UI: error("Periode pengisian KRS sudah ditutup")
+        UI-->>Mhs: tampilkanPesanGagal("Periode KRS tidak aktif")
+    else Periode KRS Aktif
+        KRS->>+DB: cekStatusPembayaranSPP(student, periodeAktif)
+        DB-->>-KRS: isLunas
+
+        alt SPP Belum Lunas (Error Flow)
+            KRS-->>UI: error("Tagihan SPP belum lunas")
+            UI-->>Mhs: tampilkanPesanGagal("Lunasi SPP sebelum mengisi KRS")
+        else SPP Lunas
+            loop Untuk setiap Course yang dipilih
+                KRS->>+RulePrasyarat: validate(student, course, periodeAktif)
+                RulePrasyarat->>+DB: cekRiwayatGradePrasyarat(student, course)
+                DB-->>-RulePrasyarat: daftarNilaiPrasyarat
+                RulePrasyarat-->>-KRS: hasilPrasyarat
+
+                alt Prasyarat Tidak Terpenuhi (Alternate Flow)
+                    KRS-->>UI: error("Prasyarat mata kuliah belum lulus")
+                    UI-->>Mhs: tampilkanErrorPrasyarat(course)
+                else Prasyarat Terpenuhi
+                    KRS->>+RuleDouble: validate(student, course, periodeAktif)
+                    RuleDouble->>+DB: cekEnrollmentExist(student, course, periodeAktif)
+                    DB-->>-RuleDouble: sudahDiambil
+                    RuleDouble-->>-KRS: hasilDoubleCheck
+
+                    alt Double Enrollment Terdeteksi (Alternate Flow)
+                        KRS-->>UI: error("Mata kuliah sudah diambil pada semester ini")
+                        UI-->>Mhs: tampilkanErrorDoubleEnrollment(course)
+                    else Belum Pernah Diambil di Semester Ini
+                        KRS->>+RuleSKS: validate(student, course, periodeAktif)
+                        RuleSKS->>+DB: hitungTotalSKSSemester(student, periodeAktif)
+                        DB-->>-RuleSKS: totalSKSSaatIni
+                        RuleSKS-->>-KRS: hasilBatasSKS
+
+                        alt Total SKS Melebihi 24 SKS (Alternate Flow)
+                            KRS-->>UI: error("Batas maksimal 24 SKS terlampaui")
+                            UI-->>Mhs: tampilkanErrorBatasSKS()
+                        else Total SKS <= 24
+                            KRS->>+RuleJadwal: validate(student, course, periodeAktif)
+                            RuleJadwal->>+DB: ambilJadwalTerpilih(student, periodeAktif)
+                            DB-->>-RuleJadwal: listSchedule
+                            RuleJadwal->>RuleJadwal: isBentrokDengan(scheduleBaru)
+                            RuleJadwal-->>-KRS: hasilCekBentrok
+
+                            alt Jadwal Bentrok (Alternate Flow)
+                                KRS-->>UI: error("Jadwal kuliah bentrok dengan MK lain")
+                                UI-->>Mhs: tampilkanErrorJadwalBentrok(course)
+                            else Lulus Semua Validasi (Main Flow)
+                                KRS->>+DB: simpanEnrollment(student, course, status = "Pending Approval")
+                                DB-->>-KRS: enrollmentTersimpan
+                            end
+                        end
+                    end
+                end
+            end
+
+            Note over KRS,DosenPA: Jika seluruh mata kuliah lulus validasi
+            KRS->>+Notif: sendNotification(DosenPA, "KRS Mahasiswa menunggu persetujuan")
+            Notif-->>-DosenPA: notifikasiPendingApproval()
+            KRS-->>UI: sukses(status = "Pending Approval")
+            UI-->>Mhs: tampilkanKonfirmasiKRS("Pending Approval")
+        end
+    end

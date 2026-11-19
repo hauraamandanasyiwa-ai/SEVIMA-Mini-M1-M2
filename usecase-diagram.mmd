@@ -1,0 +1,114 @@
+flowchart LR
+    %% ==========================================
+    %% AKTOR EKSTERNAL
+    %% ==========================================
+    PS["Calon Mahasiswa"]
+    M["Mahasiswa"]
+    D["Dosen / Dosen PA"]
+    A["Admin Akademik"]
+    SPMB["Sistem PMB"]
+
+    %% ==========================================
+    %% BOUNDARY SISTEM SEVIMA-MINI
+    %% ==========================================
+    subgraph SEVIMA["SISTEM AKADEMIK SEVIMA-MINI"]
+        direction TB
+
+        subgraph AUTH["0. Autentikasi"]
+            UC_LOGIN(["Login Sistem"])
+        end
+
+        subgraph PMB["1. Modul PMB"]
+            UC1(["Daftar Kuliah / PMB"])
+            UC2(["Unggah Berkas Pendaftaran"])
+            UC3(["Melihat Status Seleksi"])
+            UC4(["Verifikasi Berkas PMB"])
+            UC5(["Generate NIM Otomatis"])
+        end
+
+        subgraph KRS["2. Modul KRS"]
+            UC6(["Isi KRS"])
+            UC7(["Validasi Prasyarat dan Batas SKS"])
+            UC8(["Cek Bentrok Jadwal"])
+            UC9(["Hapus Mata Kuliah"])
+            UC10(["Approve KRS"])
+            UC11(["Kirim Notifikasi ke Dosen PA"])
+        end
+
+        subgraph JADWAL["3. Modul Jadwal dan Ruangan"]
+            UC12(["Melihat Jadwal Kuliah"])
+            UC13(["Mengelola Jadwal dan Ruangan"])
+        end
+
+        subgraph NILAI["4. Modul Nilai dan Transkrip"]
+            UC14(["Input Nilai"])
+            UC15(["Melihat Nilai dan IPK"])
+            UC16(["Generate Transkrip PDF"])
+        end
+
+        subgraph KEUANGAN["5. Modul Keuangan / SPP"]
+            UC17(["Melihat Tagihan SPP"])
+            UC18(["Melakukan Pembayaran SPP"])
+            UC19(["Verifikasi Pembayaran"])
+        end
+
+        subgraph PRESENSI["6. Modul Presensi QR Code"]
+            UC20(["Scan QR Presensi"])
+            UC21(["Validasi Jadwal Presensi"])
+            UC22(["Generate QR Sesi Kuliah"])
+            UC23(["Melihat Riwayat Presensi"])
+        end
+    end
+
+    %% ==========================================
+    %% RELASI AKTOR KE USE CASE
+    %% ==========================================
+    %% Calon Mahasiswa
+    PS --- UC1
+    PS --- UC3
+
+    %% Mahasiswa
+    M --- UC_LOGIN
+    M --- UC6
+    M --- UC12
+    M --- UC15
+    M --- UC17
+    M --- UC18
+    M --- UC20
+    M --- UC23
+
+    %% Dosen / Dosen PA
+    D --- UC_LOGIN
+    D --- UC10
+    D --- UC12
+    D --- UC14
+    D --- UC22
+
+    %% Admin Akademik
+    A --- UC_LOGIN
+    A --- UC4
+    A --- UC13
+    A --- UC19
+
+    %% Sistem PMB (Aktor Sistem)
+    UC5 --- SPMB
+    UC4 --- SPMB
+
+    %% ==========================================
+    %% RELASI INCLUDE DAN EXTEND
+    %% ==========================================
+    %% Modul PMB
+    UC1 -. "«include»" .-> UC2
+    UC4 -. "«extend»" .-> UC5
+
+    %% Modul KRS
+    UC6 -. "«include»" .-> UC7
+    UC6 -. "«include»" .-> UC8
+    UC6 -. "«include»" .-> UC11
+    UC9 -. "«extend»" .-> UC6
+
+    %% Modul Nilai & Transkrip
+    UC16 -. "«extend»" .-> UC15
+
+    %% Modul Presensi QR
+    UC20 -. "«include»" .-> UC21
